@@ -1,10 +1,17 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(Collider))]
 public class PlayerScript : MonoBehaviour
 {
+    [Header("Health")]
+    public int FullHealth = 3;
+    public int currentHealth;
+    public HealthUI healthUI;
+    public GameObject playerBody;
+    
     [Header("Movement")]
     public float moveSpeed = 6f;
 
@@ -36,9 +43,31 @@ public class PlayerScript : MonoBehaviour
     // Anchor state
     private bool isAnchored;
     private Vector3 anchorPointWorld;
+    
+    public static PlayerScript Instance { get; private set; }
+    [SerializeField]
+    private bool _persistent = true;
 
     void Awake()
     {
+        // Check if an instance already exists
+        if (Instance != null && Instance != this)
+        {
+            // If another instance exists, destroy this one
+            Destroy(gameObject);
+        }
+        else
+        {
+            // Set this instance as the singleton
+            Instance = this;
+
+            // If set to persistent, prevent destruction on scene loads
+            if (_persistent)
+            {
+                DontDestroyOnLoad(gameObject);
+            }
+        }
+        
         rb = GetComponent<Rigidbody>();
         col = GetComponent<Collider>();
 
@@ -71,6 +100,24 @@ public class PlayerScript : MonoBehaviour
                 if (c == col) continue;
                 Physics.IgnoreCollision(col, c, true);
             }
+        }
+    }
+    
+    void Start()
+    {
+        currentHealth = FullHealth;
+        healthUI.UpdateHealth(currentHealth);
+    }
+
+    public void DamagePlayer(int damage = 1)
+    {
+        currentHealth -= damage;
+        healthUI.UpdateHealth(currentHealth);
+
+        if (currentHealth <= 0)
+        {
+            enabled = false;
+            playerBody.SetActive(false);
         }
     }
 
