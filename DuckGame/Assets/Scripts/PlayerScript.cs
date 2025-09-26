@@ -22,11 +22,20 @@ public class PlayerScript : MonoBehaviour
     public float beakDepthOffset = 0f;
     public float beakVisualOffsetDeg = 0f;
 
+    [Header("Beak Tip Anchor")]
+    public Transform beakTip;
+    public float tipProbeRadius = 0.15f;
+    public LayerMask anchorableMask;
+    public float repositionSmoothing = 1f;
+
     private float beakAngleDeg;
     private Rigidbody rb;
     private Collider col;
     private bool isGrounded;
-    private bool jumpQueued;
+
+    // Anchor state
+    private bool isAnchored;
+    private Vector3 anchorPointWorld;
 
     void Awake()
     {
@@ -38,6 +47,7 @@ public class PlayerScript : MonoBehaviour
         rb.interpolation = RigidbodyInterpolation.Interpolate;
         rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
+        // Initialize beak angle and half-length if needed
         if (body != null && beak != null)
         {
             Vector3 from = beak.position - body.position;
@@ -48,10 +58,18 @@ public class PlayerScript : MonoBehaviour
             if (!beakPivotAtBase && beakHalfLength <= 0.001f)
             {
                 var r = beak.GetComponentInChildren<Renderer>();
-                if (r != null)
-                    beakHalfLength = Mathf.Max(0.05f, r.bounds.extents.x);
-                else
-                    beakHalfLength = 0.5f;
+                if (r != null) beakHalfLength = Mathf.Max(0.05f, r.bounds.extents.x);
+                else beakHalfLength = 0.5f;
+            }
+        }
+
+        // Make the beak & tip ignore collisions with the player's main collider
+        if (col != null)
+        {
+            foreach (var c in GetComponentsInChildren<Collider>(includeInactive: true))
+            {
+                if (c == col) continue;
+                Physics.IgnoreCollision(col, c, true);
             }
         }
     }
@@ -60,40 +78,32 @@ public class PlayerScript : MonoBehaviour
     {
         isGrounded = ComputeGrounded();
 
-        if (body != null && beak != null && Keyboard.current != null)
+        // Handle anchor input (Space)
+        HandleAnchorInput();
+
+        // Beak rotation input (J/L)
+        float rotDir = 0f;
+        if (Keyboard.current != null)
         {
-            float dir = 0f;
-            if (Keyboard.current.jKey.isPressed) dir += 1f; // CCW
-            if (Keyboard.current.lKey.isPressed) dir -= 1f; // CW
-
-            if (dir != 0f)
-            {
-                beakAngleDeg += dir * beakAngularSpeed * Time.deltaTime;
-                if (beakAngleDeg > 180f) beakAngleDeg -= 360f;
-                if (beakAngleDeg < -180f) beakAngleDeg += 360f;
-            }
-
-            float rad = beakAngleDeg * Mathf.Deg2Rad;
-            Vector3 dirXY = new Vector3(Mathf.Cos(rad), Mathf.Sin(rad), 0f);
-
-            Vector3 baseWorld = body.position + new Vector3(0f, 0f, beakDepthOffset);
-
-            if (beakPivotAtBase)
-            {
-                beak.position = baseWorld;
-                beak.rotation = Quaternion.Euler(0f, 0f, beakAngleDeg + beakVisualOffsetDeg);
-            }
-            else
-            {
-                beak.position = baseWorld + dirXY * beakHalfLength;
-                beak.rotation = Quaternion.Euler(0f, 0f, beakAngleDeg + beakVisualOffsetDeg);
-            }
+            if (Keyboard.current.jKey.isPressed) rotDir += 1f; // CCW
+            if (Keyboard.current.lKey.isPressed) rotDir -= 1f; // CW
         }
+        if (rotDir != 0f)
+        {
+            beakAngleDeg += rotDir * beakAngularSpeed * Time.deltaTime;
+            if (beakAngleDeg > 180f) beakAngleDeg -= 360f;
+            if (beakAngleDeg < -180f) beakAngleDeg += 360f;
+        }
+
+        // Update beak position/rotation (and possibly move the player if anchored)
+        UpdateBeakAndPossiblyAnchor();
     }
 
     void FixedUpdate()
     {
-        // Horizontal input (A/D or arrows + gamepad)
+        // If anchored, we don't apply our normal X motion; the body positioning is handled in UpdateBeakAndPossiblyAnchor
+        if (isAnchored) return;
+
         float x = 0f;
         if (Keyboard.current != null)
         {
@@ -105,9 +115,104 @@ public class PlayerScript : MonoBehaviour
 
         Vector3 v = rb.linearVelocity;
         v.x = x * moveSpeed;
-        v.z = 0f; // lock out forward/back
+        v.z = 0f;
         rb.linearVelocity = v;
     }
+
+    private void HandleAnchorInput()
+    {
+        if (Keyboard.current == null) return;
+
+        // Press to engage anchor
+        if (Keyboard.current.spaceKey.wasPressedThisFrame)
+        {
+            TryAcquireAnchor();
+        }
+
+        // Release to disengage
+        if (Keyboard.current.spaceKey.wasReleasedThisFrame)
+        {
+            isAnchored = false;
+        }
+    }
+
+    private void TryAcquireAnchor()
+    {
+        if (beakTip == null) return;
+
+        Vector3 tipPos = beakTip.position;
+
+        // Search for nearest collider in anchorableMask
+        Collider[] hits = Physics.OverlapSphere(tipPos, tipProbeRadius, anchorableMask, QueryTriggerInteraction.Ignore);
+        if (hits != null && hits.Length > 0)
+        {
+            Collider nearest = null;
+            float bestDist = float.MaxValue;
+
+            foreach (var h in hits)
+            {
+                Vector3 p = h.ClosestPoint(tipPos);
+                float d = (p - tipPos).sqrMagnitude;
+                if (d < bestDist)
+                {
+                    bestDist = d;
+                    nearest = h;
+                    anchorPointWorld = p;
+                }
+            }
+
+            if (nearest != null)
+            {
+                isAnchored = true;
+                return;
+            }
+        }
+
+        isAnchored = false;
+    }
+
+private void UpdateBeakAndPossiblyAnchor()
+{
+    if (body == null || beak == null || beakTip == null) return;
+
+    float rad = beakAngleDeg * Mathf.Deg2Rad;
+    Vector3 dirXY = new Vector3(Mathf.Cos(rad), Mathf.Sin(rad), 0f);
+
+    Quaternion beakRot = Quaternion.Euler(0f, 0f, beakAngleDeg + beakVisualOffsetDeg);
+
+    if (isAnchored)
+    {
+        // Get beak tip offset in world space
+        Vector3 tipOffset = Vector3.Scale(beakTip.localPosition, beak.lossyScale);
+        Vector3 rotatedOffset = beakRot * tipOffset;
+
+        // Position the beak so that its tip ends up at anchor point
+        Vector3 desiredBeakPos = anchorPointWorld - rotatedOffset;
+        beak.position = desiredBeakPos;
+        beak.rotation = beakRot;
+
+        // Now position the body so that the beak base is where it should be relative to body
+        Vector3 baseOffset = beakPivotAtBase ? Vector3.zero : dirXY * beakHalfLength;
+        Vector3 targetBodyPos = beak.position - baseOffset;
+        targetBodyPos.z -= beakDepthOffset;
+
+        Vector3 delta = targetBodyPos - body.position;
+        rb.MovePosition(rb.position + delta);
+    }
+    else
+    {
+        // Free movement, orbit around body
+        Vector3 baseWorld = body.position + new Vector3(0f, 0f, beakDepthOffset);
+        beak.rotation = beakRot;
+
+        if (beakPivotAtBase)
+            beak.position = baseWorld;
+        else
+            beak.position = baseWorld + dirXY * beakHalfLength;
+    }
+}
+
+
 
     private bool ComputeGrounded()
     {
@@ -116,4 +221,20 @@ public class PlayerScript : MonoBehaviour
         Vector3 bottom = new Vector3(b.center.x, b.min.y - groundCheckPadding, b.center.z);
         return Physics.CheckCapsule(top, bottom, groundCheckRadius, groundMask, QueryTriggerInteraction.Ignore);
     }
+
+#if UNITY_EDITOR
+void OnDrawGizmosSelected()
+{
+    if (beakTip != null)
+    {
+        Gizmos.color = isAnchored ? Color.green : Color.yellow;
+        Gizmos.DrawWireSphere(beakTip.position, tipProbeRadius);
+    }
+    if (isAnchored)
+    {
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawSphere(anchorPointWorld, 0.04f);
+    }
+}
+#endif
 }
