@@ -31,6 +31,8 @@ public class PlayerController : MonoBehaviour
     private SpringJoint grabJoint;      // more stable than FixedJoint
     private bool isAnchored;
 
+    private Vector3 spawnPoint;
+    
     // Singleton stuff
     public static PlayerScript Instance { get; private set; }
     [SerializeField]
@@ -68,10 +70,24 @@ public class PlayerController : MonoBehaviour
     
     void Start()
     {
-        currentHealth = FullHealth;
-        healthUI.UpdateHealth(currentHealth);
+        spawnPoint = transform.position;
+        ResetPlayer();
     }
 
+    void ResetPlayer()
+    {
+        currentHealth = FullHealth;
+        healthUI.UpdateHealth(currentHealth);
+        
+        rb.position = spawnPoint;
+        rb.linearVelocity = Vector3.zero;
+    }
+
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        ResetPlayer();
+    }
+    
     public void DamagePlayer(int damage = 1)
     {
         currentHealth -= damage;
@@ -79,8 +95,8 @@ public class PlayerController : MonoBehaviour
 
         if (currentHealth <= 0)
         {
-            enabled = false;
-            playerBody.SetActive(false);
+            Time.timeScale = 1f;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
         }
     }
     
