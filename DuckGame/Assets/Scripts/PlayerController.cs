@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(Collider))]
@@ -9,7 +10,6 @@ public class PlayerController : MonoBehaviour
     public int FullHealth = 3;
     public int currentHealth;
     public HealthUI healthUI;
-    public GameObject playerBody;
     
     [Header("Movement")]
     public float moveSpeed = 6f;
@@ -34,7 +34,7 @@ public class PlayerController : MonoBehaviour
     private Vector3 spawnPoint;
     
     // Singleton stuff
-    public static PlayerScript Instance { get; private set; }
+    public static PlayerController Instance { get; private set; }
     [SerializeField]
     private bool _persistent = true;
     
