@@ -4,7 +4,11 @@
 TagManager:
   serializedVersion: 3
   tags:
+<<<<<<< Updated upstream
   - Ground
+=======
+  - Beak
+>>>>>>> Stashed changes
   layers:
   - Default
   - TransparentFX
@@ -12,7 +16,7 @@ TagManager:
   - Ground
   - Water
   - UI
-  - 
+  - PlayerBody
   - 
   - 
   - 
