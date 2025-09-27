@@ -15,6 +15,7 @@ public class HealthUI : MonoBehaviour
         {
             GameObject heart = Instantiate(heartPrefab, transform.position, Quaternion.identity);
             heart.transform.SetParent(transform);
+            heart.transform.localScale = new Vector3(1, 1, 1);
         }
     }
 }
