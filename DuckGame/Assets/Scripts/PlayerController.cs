@@ -5,6 +5,12 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(Collider))]
 public class PlayerController : MonoBehaviour
 {
+    [Header("Health")]
+    public int FullHealth = 3;
+    public int currentHealth;
+    public HealthUI healthUI;
+    public GameObject playerBody;
+    
     [Header("Movement")]
     public float moveSpeed = 6f;
 
@@ -25,8 +31,30 @@ public class PlayerController : MonoBehaviour
     private SpringJoint grabJoint;      // more stable than FixedJoint
     private bool isAnchored;
 
+    // Singleton stuff
+    public static PlayerScript Instance { get; private set; }
+    [SerializeField]
+    private bool _persistent = true;
+    
     void Awake()
     {
+        // Check if an instance already exists
+        if (Instance != null && Instance != this)
+        {
+            // If another instance exists, destroy this one
+            Destroy(gameObject);
+        }
+        else
+        {
+            // Set this instance as the singleton
+            Instance = this;
+
+            // If set to persistent, prevent destruction on scene loads
+            if (_persistent)
+            {
+                DontDestroyOnLoad(gameObject);
+            }
+        }
         rb = GetComponent<Rigidbody>();
 
         // lock to XY plane
@@ -37,7 +65,25 @@ public class PlayerController : MonoBehaviour
 
         rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
     }
+    
+    void Start()
+    {
+        currentHealth = FullHealth;
+        healthUI.UpdateHealth(currentHealth);
+    }
 
+    public void DamagePlayer(int damage = 1)
+    {
+        currentHealth -= damage;
+        healthUI.UpdateHealth(currentHealth);
+
+        if (currentHealth <= 0)
+        {
+            enabled = false;
+            playerBody.SetActive(false);
+        }
+    }
+    
     void Update()
     {
         HandleMovement();
