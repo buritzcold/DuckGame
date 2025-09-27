@@ -28,7 +28,7 @@ public class PlayerController : MonoBehaviour
     public float attachDamper = 200f;   // Joint damping
 
     private Rigidbody rb;
-    private SpringJoint grabJoint;      // more stable than FixedJoint
+    private HingeJoint grabJoint;      // more stable than FixedJoint
     private bool isAnchored;
 
     private Vector3 spawnPoint;
@@ -123,8 +123,9 @@ public class PlayerController : MonoBehaviour
         float move = 0f;
         if (Keyboard.current.aKey.isPressed) move = -1f;
         if (Keyboard.current.dKey.isPressed) move = 1f;
-
+;
         Vector3 velocity = rb.linearVelocity;
+        rb.AddForce(Vector3.right * move, ForceMode.VelocityChange);
         velocity.x = move * moveSpeed;
         rb.linearVelocity = velocity;
     }
@@ -178,24 +179,20 @@ public class PlayerController : MonoBehaviour
             Collider hit = hits[0];
             Rigidbody hitRb = hit.attachedRigidbody;
 
-            grabJoint = beakTip.gameObject.AddComponent<SpringJoint>();
-            grabJoint.autoConfigureConnectedAnchor = false;
-            grabJoint.anchor = Vector3.zero;
-
+            grabJoint = gameObject.AddComponent<HingeJoint>();
+            grabJoint.autoConfigureConnectedAnchor = true;
+            grabJoint.anchor = beakTip.position - gameObject.transform.position;
+            
             if (hitRb != null)
             {
                 grabJoint.connectedBody = hitRb;
-                grabJoint.connectedAnchor = hitRb.transform.InverseTransformPoint(beakTip.position);
+                // grabJoint.connectedAnchor = hitRb.transform.InverseTransformPoint(beakTip.position);
             }
             else
             {
                 grabJoint.connectedBody = null; // world anchor
-                grabJoint.connectedAnchor = beakTip.position;
+                // grabJoint.connectedAnchor = beakTip.position;
             }
-
-            grabJoint.spring = attachSpring;
-            grabJoint.damper = attachDamper;
-            grabJoint.maxDistance = 0f;
 
             isAnchored = true;
         }
