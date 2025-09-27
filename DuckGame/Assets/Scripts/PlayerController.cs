@@ -43,20 +43,19 @@ public class PlayerController : MonoBehaviour
         // Check if an instance already exists
         if (Instance != null && Instance != this)
         {
-            // If another instance exists, destroy this one
             Destroy(gameObject);
+            return;
         }
         else
         {
-            // Set this instance as the singleton
             Instance = this;
 
-            // If set to persistent, prevent destruction on scene loads
             if (_persistent)
             {
                 DontDestroyOnLoad(gameObject);
             }
         }
+
         rb = GetComponent<Rigidbody>();
 
         // lock to XY plane
@@ -66,6 +65,14 @@ public class PlayerController : MonoBehaviour
                          RigidbodyConstraints.FreezePositionZ;
 
         rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+
+        // Subscribe to scene load events
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    void OnDestroy()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
     }
     
     void Start()
@@ -74,10 +81,11 @@ public class PlayerController : MonoBehaviour
         ResetPlayer();
     }
 
-    void ResetPlayer()
+    private void ResetPlayer()
     {
         currentHealth = FullHealth;
-        healthUI.UpdateHealth(currentHealth);
+        if (healthUI != null)
+            healthUI.UpdateHealth(currentHealth);
         
         rb.position = spawnPoint;
         rb.linearVelocity = Vector3.zero;
@@ -85,13 +93,15 @@ public class PlayerController : MonoBehaviour
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        // After reload, reset back to spawn with full health
         ResetPlayer();
     }
     
     public void DamagePlayer(int damage = 1)
     {
         currentHealth -= damage;
-        healthUI.UpdateHealth(currentHealth);
+        if (healthUI != null)
+            healthUI.UpdateHealth(currentHealth);
 
         if (currentHealth <= 0)
         {
