@@ -224,7 +224,7 @@ Transform:
   m_GameObject: {fileID: 88491054}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 7.5, z: 1.5}
+  m_LocalPosition: {x: 0, y: 7.5, z: 1.6}
   m_LocalScale: {x: 50, y: 20, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1303,7 +1303,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: e6abba7a1222dab4990f0e36bd024c94, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -14.510059
+      value: -2.03
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: e6abba7a1222dab4990f0e36bd024c94, type: 3}
       propertyPath: m_LocalPosition.y
@@ -1311,7 +1311,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: e6abba7a1222dab4990f0e36bd024c94, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0.9
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: e6abba7a1222dab4990f0e36bd024c94, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1344,7 +1344,7 @@ PrefabInstance:
     - target: {fileID: -7511558181221131132, guid: e6abba7a1222dab4990f0e36bd024c94, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: 3a7cfbf81356439488088a6657ee5e02, type: 2}
+      objectReference: {fileID: 2100000, guid: 77ac7e847ccfc3945965444bf96399fe, type: 2}
     - target: {fileID: 919132149155446097, guid: e6abba7a1222dab4990f0e36bd024c94, type: 3}
       propertyPath: m_Name
       value: BrickLight
