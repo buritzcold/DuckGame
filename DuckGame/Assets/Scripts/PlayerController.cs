@@ -306,6 +306,24 @@ public class PlayerController : MonoBehaviour
 
         // Keep music rolling
         TryStartMusic();
+
+        TryBindCamera();
+    }
+
+    private void TryBindCamera()
+    {
+        var cam = CameraFollowFlip.Instance;
+        if (cam == null)
+        {
+            cam = FindObjectOfType<CameraFollowFlip>(includeInactive: true);
+        }
+        if (cam != null)
+        {
+            // Always point it to THIS player (persistent across scenes)
+            cam.target = this.transform;
+            // Snap so there’s no one-frame drift after a respawn
+            cam.SnapImmediate();
+        }
     }
 
     private void ResetPlayerHealthOnly()
