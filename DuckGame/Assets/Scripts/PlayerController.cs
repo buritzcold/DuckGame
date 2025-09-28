@@ -52,6 +52,13 @@ public class PlayerController : MonoBehaviour
     [Tooltip("Downward gravity strength (m/s^2).")]
     [Range(0f, 60f)] public float gravity = 14f;
 
+    // --- Anti-wall-stick (horizontal sweep) ---  // <<<
+    [Header("Anti-Wall-Stick")]                    // <<<
+    [Tooltip("Small gap to keep off walls.")]      // <<<
+    public float wallSkin = 0.01f;                 // <<<
+    [Tooltip("Extra radius safety for the side sweep.")] // <<<
+    public float wallSweepPadding = 0.005f;        // <<<
+
     private Rigidbody rb;
 
     // --- Held item state ---
@@ -74,6 +81,10 @@ public class PlayerController : MonoBehaviour
 
     // Socket that cancels parent scale so held items don't get stretched
     private Transform holdSocket;
+
+    // --- Cached refs & input (child colliders) --- // <<<
+    private Collider[] _cols;                         // <<<
+    private float _moveInput;                         // <<<
 
     // Singleton stuff
     public static PlayerController Instance { get; private set; }
@@ -98,6 +109,7 @@ public class PlayerController : MonoBehaviour
 
         rb = GetComponent<Rigidbody>();
         playerColliders = GetComponentsInChildren<Collider>(includeInactive: false);
+        _cols = GetComponentsInChildren<Collider>(includeInactive: false); // <<< use ALL child colliders
 
         // lock to XY plane
         rb.constraints = RigidbodyConstraints.FreezeRotationX |
@@ -166,13 +178,17 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
-        HandleMovement();
+        HandleMovement();        // now reads input only  // <<<
         HandleBeakRotation();
         HandlePickupDropInput();
     }
 
     void FixedUpdate()
     {
+        // Horizontal: sweep against all child colliders to avoid pushing into walls // <<<
+        ApplyHorizontalSweepMove(); // <<<
+
+        // Gravity (unchanged)
         if (useCustomGravity)
         {
             rb.AddForce(Vector3.down * gravity, ForceMode.Acceleration);
@@ -191,13 +207,70 @@ public class PlayerController : MonoBehaviour
     // ---------------- MOVEMENT ----------------
     void HandleMovement()
     {
-        float move = 0f;
-        if (Keyboard.current.aKey.isPressed) move = -1f;
-        if (Keyboard.current.dKey.isPressed) move = 1f;
+        // Input only; velocity is applied in FixedUpdate via the sweep // <<<
+        _moveInput = 0f;                               // <<<
+        if (Keyboard.current.aKey.isPressed) _moveInput = -1f; // <<<
+        if (Keyboard.current.dKey.isPressed) _moveInput =  1f; // <<<
+    }
 
-        Vector3 v = rb.linearVelocity;
-        v.x = move * moveSpeed;
-        rb.linearVelocity = v;
+    // Sweep-based horizontal movement that respects ALL child colliders // <<<
+    void ApplyHorizontalSweepMove()
+    {
+        float desiredDx = _moveInput * moveSpeed * Time.fixedDeltaTime;
+
+        // No input: don't keep feeding into walls
+        if (Mathf.Approximately(desiredDx, 0f))
+        {
+            var v0 = rb.linearVelocity;
+            v0.x = 0f;
+            rb.linearVelocity = v0;
+            return;
+        }
+
+        if (_cols == null || _cols.Length == 0)
+        {
+            // Fallback if somehow no colliders found
+            var v = rb.linearVelocity;
+            v.x = (_moveInput * moveSpeed);
+            rb.linearVelocity = v;
+            return;
+        }
+
+        float dirSign = Mathf.Sign(desiredDx);
+        Vector3 dir = dirSign > 0f ? Vector3.right : Vector3.left;
+        float targetDist = Mathf.Abs(desiredDx) + Mathf.Max(0f, wallSkin);
+        float allowedDist = targetDist; // shrink if any child would hit
+
+        for (int i = 0; i < _cols.Length; i++)
+        {
+            var c = _cols[i];
+            if (c == null || !c.enabled || c.isTrigger) continue;
+
+            Bounds b = c.bounds;
+            float insetY = Mathf.Min(0.05f, b.extents.y * 0.25f); // avoid floor/ceiling
+            Vector3 top = new Vector3(b.center.x, b.max.y - insetY, b.center.z);
+            Vector3 bottom = new Vector3(b.center.x, b.min.y + insetY, b.center.z);
+
+            float radius = Mathf.Max(
+                0.02f,
+                Mathf.Min(b.extents.x, b.extents.y) - Mathf.Max(0f, wallSweepPadding)
+            );
+
+            if (Physics.CapsuleCast(
+                    bottom, top, radius, dir,
+                    out RaycastHit hit, allowedDist, // use current best to early-out
+                    groundMask, QueryTriggerInteraction.Ignore))
+            {
+                float thisAllowed = Mathf.Max(0f, hit.distance - wallSkin);
+                if (thisAllowed < allowedDist) allowedDist = thisAllowed;
+                if (allowedDist <= 1e-6f) break;
+            }
+        }
+
+        float clampedDx = dirSign * allowedDist;
+        var vFinal = rb.linearVelocity;
+        vFinal.x = clampedDx / Mathf.Max(Time.fixedDeltaTime, 1e-6f);
+        rb.linearVelocity = vFinal;
     }
 
     // ---------------- BEAK ROTATION ----------------
@@ -403,7 +476,6 @@ public class PlayerController : MonoBehaviour
             }
             else
             {
-                // Optional warning; comment this if you prefer silence
                 Debug.LogWarning($"[PlayerController] HeldItem layer '{heldItemLayerName}' not found. Skipping layer swap.");
             }
         }
