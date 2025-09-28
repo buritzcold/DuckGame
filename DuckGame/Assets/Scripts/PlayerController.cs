@@ -52,12 +52,31 @@ public class PlayerController : MonoBehaviour
     [Tooltip("Downward gravity strength (m/s^2).")]
     [Range(0f, 60f)] public float gravity = 14f;
 
-    // --- Anti-wall-stick (horizontal sweep) ---  // <<<
-    [Header("Anti-Wall-Stick")]                    // <<<
-    [Tooltip("Small gap to keep off walls.")]      // <<<
-    public float wallSkin = 0.01f;                 // <<<
-    [Tooltip("Extra radius safety for the side sweep.")] // <<<
-    public float wallSweepPadding = 0.005f;        // <<<
+    // --- Anti-wall-stick (horizontal sweep) ---
+    [Header("Anti-Wall-Stick")]
+    [Tooltip("Small gap to keep off walls.")]
+    public float wallSkin = 0.01f;
+    [Tooltip("Extra radius safety for the side sweep.")]
+    public float wallSweepPadding = 0.005f;
+
+    // ---------------- AUDIO ----------------
+    [Header("Audio")]
+    [Tooltip("Optional dedicated source for SFX (2D recommended). If none, one will be added.")]
+    public AudioSource sfxSource;
+    [Tooltip("Optional dedicated source for background music (2D, loop). If none, one will be added.")]
+    public AudioSource musicSource;
+
+    [Tooltip("Played once when an item is successfully grabbed.")]
+    public AudioClip grabSfx;
+    [Range(0f, 1f)] public float grabSfxVolume = 1f;
+
+    [Tooltip("Played when the player takes damage.")]
+    public AudioClip damageSfx;
+    [Range(0f, 1f)] public float damageSfxVolume = 1f;
+
+    [Tooltip("Looping background music.")]
+    public AudioClip musicLoop;
+    [Range(0f, 1f)] public float musicVolume = 0.5f;
 
     private Rigidbody rb;
 
@@ -82,9 +101,9 @@ public class PlayerController : MonoBehaviour
     // Socket that cancels parent scale so held items don't get stretched
     private Transform holdSocket;
 
-    // --- Cached refs & input (child colliders) --- // <<<
-    private Collider[] _cols;                         // <<<
-    private float _moveInput;                         // <<<
+    // --- Cached refs & input (child colliders) ---
+    private Collider[] _cols;
+    private float _moveInput;
 
     // Singleton stuff
     public static PlayerController Instance { get; private set; }
@@ -109,7 +128,7 @@ public class PlayerController : MonoBehaviour
 
         rb = GetComponent<Rigidbody>();
         playerColliders = GetComponentsInChildren<Collider>(includeInactive: false);
-        _cols = GetComponentsInChildren<Collider>(includeInactive: false); // <<< use ALL child colliders
+        _cols = GetComponentsInChildren<Collider>(includeInactive: false);
 
         // lock to XY plane
         rb.constraints = RigidbodyConstraints.FreezeRotationX |
@@ -121,6 +140,12 @@ public class PlayerController : MonoBehaviour
 
         // Toggle Unity gravity based on slider flag
         rb.useGravity = !useCustomGravity;
+
+        // Set up audio sources safely
+        EnsureAudioSources();
+
+        // Start music once (persists because of singleton)
+        TryStartMusic();
 
         // Subscribe to scene load events
         SceneManager.sceneLoaded += OnSceneLoaded;
@@ -162,10 +187,17 @@ public class PlayerController : MonoBehaviour
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         ResetPlayer();
+        // Music already running due to singleton; avoid restarting
+        TryStartMusic();
     }
 
     public void DamagePlayer(int damage = 1)
     {
+        if (damage > 0)
+        {
+            PlaySfx(damageSfx, damageSfxVolume);
+        }
+
         currentHealth -= damage;
         if (healthUI != null) healthUI.UpdateHealth(currentHealth);
 
@@ -178,17 +210,15 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
-        HandleMovement();        // now reads input only  // <<<
+        HandleMovement();
         HandleBeakRotation();
         HandlePickupDropInput();
     }
 
     void FixedUpdate()
     {
-        // Horizontal: sweep against all child colliders to avoid pushing into walls // <<<
-        ApplyHorizontalSweepMove(); // <<<
+        ApplyHorizontalSweepMove();
 
-        // Gravity (unchanged)
         if (useCustomGravity)
         {
             rb.AddForce(Vector3.down * gravity, ForceMode.Acceleration);
@@ -197,7 +227,6 @@ public class PlayerController : MonoBehaviour
 
     void LateUpdate()
     {
-        // Keep the hold socket's world scale = (1,1,1) every frame to prevent stretching
         if (holdSocket != null && beakTip != null)
         {
             ApplyInverseScaleToHoldSocket();
@@ -207,18 +236,15 @@ public class PlayerController : MonoBehaviour
     // ---------------- MOVEMENT ----------------
     void HandleMovement()
     {
-        // Input only; velocity is applied in FixedUpdate via the sweep // <<<
-        _moveInput = 0f;                               // <<<
-        if (Keyboard.current.aKey.isPressed) _moveInput = -1f; // <<<
-        if (Keyboard.current.dKey.isPressed) _moveInput =  1f; // <<<
+        _moveInput = 0f;
+        if (Keyboard.current.aKey.isPressed) _moveInput = -1f;
+        if (Keyboard.current.dKey.isPressed) _moveInput =  1f;
     }
 
-    // Sweep-based horizontal movement that respects ALL child colliders // <<<
     void ApplyHorizontalSweepMove()
     {
         float desiredDx = _moveInput * moveSpeed * Time.fixedDeltaTime;
 
-        // No input: don't keep feeding into walls
         if (Mathf.Approximately(desiredDx, 0f))
         {
             var v0 = rb.linearVelocity;
@@ -229,7 +255,6 @@ public class PlayerController : MonoBehaviour
 
         if (_cols == null || _cols.Length == 0)
         {
-            // Fallback if somehow no colliders found
             var v = rb.linearVelocity;
             v.x = (_moveInput * moveSpeed);
             rb.linearVelocity = v;
@@ -239,7 +264,7 @@ public class PlayerController : MonoBehaviour
         float dirSign = Mathf.Sign(desiredDx);
         Vector3 dir = dirSign > 0f ? Vector3.right : Vector3.left;
         float targetDist = Mathf.Abs(desiredDx) + Mathf.Max(0f, wallSkin);
-        float allowedDist = targetDist; // shrink if any child would hit
+        float allowedDist = targetDist;
 
         for (int i = 0; i < _cols.Length; i++)
         {
@@ -247,7 +272,7 @@ public class PlayerController : MonoBehaviour
             if (c == null || !c.enabled || c.isTrigger) continue;
 
             Bounds b = c.bounds;
-            float insetY = Mathf.Min(0.05f, b.extents.y * 0.25f); // avoid floor/ceiling
+            float insetY = Mathf.Min(0.05f, b.extents.y * 0.25f);
             Vector3 top = new Vector3(b.center.x, b.max.y - insetY, b.center.z);
             Vector3 bottom = new Vector3(b.center.x, b.min.y + insetY, b.center.z);
 
@@ -258,7 +283,7 @@ public class PlayerController : MonoBehaviour
 
             if (Physics.CapsuleCast(
                     bottom, top, radius, dir,
-                    out RaycastHit hit, allowedDist, // use current best to early-out
+                    out RaycastHit hit, allowedDist,
                     groundMask, QueryTriggerInteraction.Ignore))
             {
                 float thisAllowed = Mathf.Max(0f, hit.distance - wallSkin);
@@ -285,7 +310,6 @@ public class PlayerController : MonoBehaviour
 
         float desiredDelta = rotateInput * beakAngularSpeed * Time.deltaTime;
 
-        // Tip contact for vault behavior (unchanged)
         bool tipTouchingGround = Physics.CheckSphere(
             beakTip.position,
             Mathf.Max(0.05f, beakTipRadius * 0.8f),
@@ -452,7 +476,7 @@ public class PlayerController : MonoBehaviour
             }
         }
 
-        // --- NEW: make it ghost through world but still fire triggers ---
+        // Make it ghost through world but still fire triggers (optional)
         heldItemColliderFlags.Clear();
         {
             var itemCols2 = heldItemRB.GetComponentsInChildren<Collider>(includeInactive: false);
@@ -461,12 +485,12 @@ public class PlayerController : MonoBehaviour
                 heldItemColliderFlags.Add((c, c.isTrigger));
                 if (setHeldCollidersAsTrigger)
                 {
-                    c.isTrigger = true; // only interacts with triggers
+                    c.isTrigger = true;
                 }
             }
         }
 
-        // Move to a "HeldItem" layer if present (so even if something forgets to be trigger, it won't collide)
+        // Move to a "HeldItem" layer if present
         if (!string.IsNullOrEmpty(heldItemLayerName))
         {
             int layerIdx = LayerMask.NameToLayer(heldItemLayerName);
@@ -480,14 +504,16 @@ public class PlayerController : MonoBehaviour
             }
         }
 
-        isAnchored = true; // gizmo color only now that grab is item specific
+        isAnchored = true;
+
+        // --- Audio: grab sound
+        PlaySfx(grabSfx, grabSfxVolume);
     }
 
     void DropHeldItem()
     {
         if (heldItemRB == null) return;
 
-        // Restore collisions ignored with player
         foreach (var pair in ignoredPairs)
         {
             if (pair.itemCol != null && pair.playerCol != null)
@@ -495,25 +521,20 @@ public class PlayerController : MonoBehaviour
         }
         ignoredPairs.Clear();
 
-        // Restore collider trigger flags
         foreach (var (col, wasTrigger) in heldItemColliderFlags)
         {
             if (col != null) col.isTrigger = wasTrigger;
         }
         heldItemColliderFlags.Clear();
 
-        // Restore original layer
         if (heldItemOriginalLayer >= 0)
             SetLayerRecursively(heldItemRB.gameObject, heldItemOriginalLayer);
 
-        // Unparent and make dynamic again
         heldItemRB.transform.SetParent(null, worldPositionStays: true);
         heldItemRB.isKinematic = false;
 
-        // Restore interpolation for normal motion
         heldItemRB.interpolation = heldItemPrevInterpolation;
 
-        // Keep current player velocity for smooth release
         heldItemRB.linearVelocity = rb.linearVelocity;
 
         heldItemRB = null;
@@ -540,7 +561,6 @@ public class PlayerController : MonoBehaviour
 
     void ApplyInverseScaleToHoldSocket()
     {
-        // Keep socket's WORLD scale = (1,1,1), so children don't inherit any non-uniform scale
         Vector3 s = beakTip.lossyScale;
         holdSocket.localScale = new Vector3(
             s.x != 0f ? 1f / s.x : 1f,
@@ -576,5 +596,57 @@ public class PlayerController : MonoBehaviour
             Gizmos.color = Color.magenta;
             Gizmos.DrawLine(head.position, beakTip.position);
         }
+    }
+
+    // ---------------- AUDIO HELPERS ----------------
+    void EnsureAudioSources()
+    {
+        // SFX
+        if (sfxSource == null)
+        {
+            sfxSource = gameObject.GetComponent<AudioSource>();
+            if (sfxSource == null || (musicSource != null && sfxSource == musicSource))
+            {
+                sfxSource = gameObject.AddComponent<AudioSource>();
+            }
+            sfxSource.playOnAwake = false;
+            sfxSource.loop = false;
+            sfxSource.spatialBlend = 0f; // 2D SFX for UI-like feedback
+        }
+
+        // Music
+        if (musicSource == null)
+        {
+            // Try not to reuse the SFX source
+            musicSource = gameObject.AddComponent<AudioSource>();
+            musicSource.playOnAwake = false;
+            musicSource.loop = true;
+            musicSource.spatialBlend = 0f; // 2D music
+            musicSource.ignoreListenerPause = true;
+        }
+    }
+
+    void TryStartMusic()
+    {
+        if (musicLoop == null || musicSource == null) return;
+
+        // Only (re)assign if needed; don't restart if it's already playing the same clip
+        if (musicSource.clip != musicLoop)
+        {
+            musicSource.clip = musicLoop;
+        }
+
+        musicSource.volume = musicVolume;
+
+        if (!musicSource.isPlaying)
+        {
+            musicSource.Play();
+        }
+    }
+
+    void PlaySfx(AudioClip clip, float volume)
+    {
+        if (clip == null || sfxSource == null) return;
+        sfxSource.PlayOneShot(clip, Mathf.Clamp01(volume));
     }
 }
