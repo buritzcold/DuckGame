@@ -250,7 +250,7 @@ Rigidbody:
     m_Bits: 0
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
-  m_UseGravity: 1
+  m_UseGravity: 0
   m_IsKinematic: 0
   m_Interpolate: 0
   m_Constraints: 72
@@ -279,9 +279,20 @@ MonoBehaviour:
   groundMask:
     serializedVersion: 2
     m_Bits: 8
+  beakShaftRadius: 0.1
+  beakTipRadius: 0.1
+  maxRotationStepDeg: 3
+  surfaceEpsilon: 0.002
+  itemMask:
+    serializedVersion: 2
+    m_Bits: 0
   grabRadius: 0.5
-  attachSpring: 2000
-  attachDamper: 200
+  heldItemLayerName: HeldItem
+  setHeldCollidersAsTrigger: 1
+  useCustomGravity: 1
+  gravity: 14
+  wallSkin: 0.01
+  wallSweepPadding: 0.005
   _persistent: 1
 --- !u!1 &3965927288899066048
 GameObject:
@@ -358,7 +369,7 @@ Camera:
     serializedVersion: 2
     m_Bits: 4294967295
   m_RenderingPath: -1
-  m_TargetTexture: {fileID: 0}
+  m_TargetTexture: {fileID: 8400000, guid: 5c227b71d38d484448307387398c72b1, type: 2}
   m_TargetDisplay: 0
   m_TargetEye: 3
   m_HDR: 1
@@ -905,6 +916,18 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5633065728142149936, guid: 7ba52dddb1fccd7aebbe6ee4f598d626, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7727387674284110909, guid: 7ba52dddb1fccd7aebbe6ee4f598d626, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 1920
+      objectReference: {fileID: 0}
+    - target: {fileID: 7727387674284110909, guid: 7ba52dddb1fccd7aebbe6ee4f598d626, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7727387674284110909, guid: 7ba52dddb1fccd7aebbe6ee4f598d626, type: 3}
+      propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8118630306384005936, guid: 7ba52dddb1fccd7aebbe6ee4f598d626, type: 3}
