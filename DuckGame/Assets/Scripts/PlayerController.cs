@@ -7,6 +7,10 @@ using UnityEngine.SceneManagement;
 [RequireComponent(typeof(Collider))]
 public class PlayerController : MonoBehaviour
 {
+    // ====== STATIC: next-scene spawn contract ======
+    // Set by ScenePortal before loading the next scene.
+    public static string NextSpawnId = null;
+
     [Header("Health")]
     public int FullHealth = 3;
     public int currentHealth;
@@ -121,7 +125,9 @@ public class PlayerController : MonoBehaviour
     // Visual flag only (for gizmo color)
     private bool isAnchored;
 
+    // Fallback first-scene spawn only (kept, but no longer forced on every scene load)
     private Vector3 spawnPoint;
+    private bool _haveCapturedInitialSpawn;
 
     // Socket that cancels parent scale so held items don't get stretched
     private Transform holdSocket;
@@ -221,25 +227,98 @@ public class PlayerController : MonoBehaviour
 
     void Start()
     {
+        // Capture only as a fallback for reloading the very first scene.
         spawnPoint = transform.position;
-        ResetPlayer();
+        _haveCapturedInitialSpawn = true;
+
+        ResetPlayerHealthOnly();
     }
 
-    private void ResetPlayer()
+    // ================== SCENE LOAD & SPAWNING ==================
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        // 1) Choose a spawn: match by NextSpawnId, else defaultIfUnspecified, else keep current pos.
+        Vector3? chosenPos = null;
+        bool? desiredFacingRight = null;
+
+        var allSpawns = FindObjectsOfType<SpawnPoint>(includeInactive: false);
+        if (!string.IsNullOrEmpty(NextSpawnId))
+        {
+            foreach (var sp in allSpawns)
+            {
+                if (!string.IsNullOrEmpty(sp.spawnId) && sp.spawnId == NextSpawnId)
+                {
+                    chosenPos = sp.transform.position;
+                    desiredFacingRight = sp.faceRight;
+                    break;
+                }
+            }
+        }
+        if (chosenPos == null)
+        {
+            foreach (var sp in allSpawns)
+            {
+                if (sp.defaultIfUnspecified)
+                {
+                    chosenPos = sp.transform.position;
+                    desiredFacingRight = sp.faceRight;
+                    break;
+                }
+            }
+        }
+
+        // 2) Apply spawn (or keep current)
+        if (chosenPos.HasValue)
+        {
+            rb.position = chosenPos.Value;
+            rb.rotation = Quaternion.identity;
+            rb.linearVelocity = Vector3.zero;
+        }
+        else if (!_haveCapturedInitialSpawn)
+        {
+            rb.position = transform.position;
+            rb.linearVelocity = Vector3.zero;
+        }
+        else
+        {
+            rb.linearVelocity = Vector3.zero;
+        }
+
+        // 3) Apply optional facing from spawn
+        if (desiredFacingRight.HasValue)
+        {
+            SetFacingRight(desiredFacingRight.Value);
+            // Snap visuals to avoid one-frame drift
+            if (body != null)
+            {
+                _currentBodyYaw = _targetBodyYaw;
+                _currentBodyX = _targetBodyX;
+                var e = body.localEulerAngles; e.y = _currentBodyYaw; body.localEulerAngles = e;
+                var lp = body.localPosition; lp.x = _currentBodyX; body.localPosition = lp;
+            }
+        }
+
+        // 4) Reset transient gameplay state (but NOT to some old spawn).
+        ResetPlayerTransientState();
+
+        // 5) Clear for next transition
+        NextSpawnId = null;
+
+        // Keep music rolling
+        TryStartMusic();
+    }
+
+    private void ResetPlayerHealthOnly()
     {
         currentHealth = FullHealth;
         if (healthUI != null) healthUI.UpdateHealth(currentHealth);
-        rb.position = spawnPoint;
-        rb.linearVelocity = Vector3.zero;
-
-        if (heldItemRB != null) DropHeldItem();
     }
 
-    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    private void ResetPlayerTransientState()
     {
-        ResetPlayer();
-        // Music already running due to singleton; avoid restarting
-        TryStartMusic();
+        ResetPlayerHealthOnly();
+        if (heldItemRB != null) DropHeldItem();
+        Time.timeScale = 1f;
     }
 
     public void DamagePlayer(int damage = 1)
@@ -255,6 +334,8 @@ public class PlayerController : MonoBehaviour
         if (currentHealth <= 0)
         {
             Time.timeScale = 1f;
+            // Allow scene default spawn to handle placement on reload
+            NextSpawnId = null;
             SceneManager.LoadScene(SceneManager.GetActiveScene().name);
         }
     }
@@ -262,7 +343,7 @@ public class PlayerController : MonoBehaviour
     void Update()
     {
         HandleMovement();
-        HandleFacingInput();     // << add: flips on A/D
+        HandleFacingInput();     // flips on A/D keypress
         UpdateBodyFlipSmoothing();
         HandleBeakRotation();
         HandlePickupDropInput();
@@ -301,7 +382,7 @@ public class PlayerController : MonoBehaviour
         if (Keyboard.current.aKey.wasPressedThisFrame) SetFacingRight(false);
         if (Keyboard.current.dKey.wasPressedThisFrame) SetFacingRight(true);
 
-        // Optional: if you want auto-flip when holding a direction (uncomment):
+        // Optional: auto-flip when holding a direction:
         // if (_moveInput < -0.2f) SetFacingRight(false);
         // if (_moveInput >  0.2f) SetFacingRight(true);
     }

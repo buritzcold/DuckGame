@@ -9,6 +9,9 @@ public class ScenePortal : MonoBehaviour
     [Tooltip("Only the player can trigger this. Leave empty to allow anything.")]
     public string requiredTag = "Player";
 
+    [Tooltip("Optional: SpawnPoint id in the destination scene to place the player at.")]
+    public string targetSpawnId;
+
     bool _fired;
 
     void OnTriggerEnter(Collider other)
@@ -18,6 +21,10 @@ public class ScenePortal : MonoBehaviour
         if (string.IsNullOrEmpty(sceneToLoad)) return;
 
         _fired = true;
+
+        // Tell the PlayerController which spawn to use in the next scene.
+        PlayerController.NextSpawnId = targetSpawnId;
+
         SceneManager.LoadScene(sceneToLoad);
     }
 }
