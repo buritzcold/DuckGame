@@ -1572,7 +1572,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 51f3e94b34c645b4fb310bc01073f6ff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenePortal
-  sceneToLoad: OutsideLevel
+  sceneToLoad: OutdoorLevel
   requiredTag: Player
 --- !u!1 &696565976
 GameObject:
