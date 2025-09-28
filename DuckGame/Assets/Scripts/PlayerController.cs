@@ -78,6 +78,31 @@ public class PlayerController : MonoBehaviour
     public AudioClip musicLoop;
     [Range(0f, 1f)] public float musicVolume = 0.5f;
 
+    // ---------------- FACING / BODY FLIP ----------------
+    [Header("Facing / Body Flip")]
+    [Tooltip("Child transform that visually represents the duck's body (will rotate/offset smoothly).")]
+    public Transform body;
+    [Tooltip("Local Y rotation when facing RIGHT.")]
+    public float bodyYawRight = 0f;
+    [Tooltip("Local Y rotation when facing LEFT.")]
+    public float bodyYawLeft = 180f;
+    [Tooltip("Target local X when facing RIGHT (e.g., 2.1).")]
+    public float bodyXRight = 2.1f;
+    [Tooltip("Target local X when facing LEFT (e.g., 0.9).")]
+    public float bodyXLeft = 0.9f;
+    [Tooltip("Seconds to smooth the body yaw flip.")]
+    public float bodyYawSmoothTime = 0.08f;
+    [Tooltip("Seconds to smooth the body X offset change.")]
+    public float bodyXSmoothTime = 0.08f;
+
+    private bool _facingRight = true;
+    private float _targetBodyYaw;
+    private float _currentBodyYaw;
+    private float _bodyYawVel;
+    private float _targetBodyX;
+    private float _currentBodyX;
+    private float _bodyXVel;
+
     private Rigidbody rb;
 
     // --- Held item state ---
@@ -149,6 +174,32 @@ public class PlayerController : MonoBehaviour
 
         // Subscribe to scene load events
         SceneManager.sceneLoaded += OnSceneLoaded;
+
+        // ---- Initialize body flip state ----
+        if (body != null)
+        {
+            // Try to infer facing from current local Y
+            float y = body.localEulerAngles.y;
+            _facingRight = Mathf.DeltaAngle(y, bodyYawRight) * Mathf.DeltaAngle(y, bodyYawRight) <
+                           Mathf.DeltaAngle(y, bodyYawLeft) * Mathf.DeltaAngle(y, bodyYawLeft);
+
+            _targetBodyYaw = _currentBodyYaw = _facingRight ? bodyYawRight : bodyYawLeft;
+
+            float startX = body.localPosition.x;
+            // If starting close to one of the targets, use it; else pick by facing.
+            if (Mathf.Abs(startX - bodyXRight) < Mathf.Abs(startX - bodyXLeft))
+            {
+                _targetBodyX = _currentBodyX = bodyXRight;
+            }
+            else
+            {
+                _targetBodyX = _currentBodyX = bodyXLeft;
+            }
+
+            // Snap body to the initial targets to avoid first-frame drift.
+            var lp = body.localPosition; lp.x = _currentBodyX; body.localPosition = lp;
+            var lr = body.localEulerAngles; lr.y = _currentBodyYaw; body.localEulerAngles = lr;
+        }
     }
 
     void OnEnable()
@@ -211,6 +262,8 @@ public class PlayerController : MonoBehaviour
     void Update()
     {
         HandleMovement();
+        HandleFacingInput();     // << add: flips on A/D
+        UpdateBodyFlipSmoothing();
         HandleBeakRotation();
         HandlePickupDropInput();
     }
@@ -239,6 +292,45 @@ public class PlayerController : MonoBehaviour
         _moveInput = 0f;
         if (Keyboard.current.aKey.isPressed) _moveInput = -1f;
         if (Keyboard.current.dKey.isPressed) _moveInput =  1f;
+    }
+
+    // ---------------- FACING INPUT & SMOOTHING ----------------
+    void HandleFacingInput()
+    {
+        // Flip when A/D are PRESSED (not just held)
+        if (Keyboard.current.aKey.wasPressedThisFrame) SetFacingRight(false);
+        if (Keyboard.current.dKey.wasPressedThisFrame) SetFacingRight(true);
+
+        // Optional: if you want auto-flip when holding a direction (uncomment):
+        // if (_moveInput < -0.2f) SetFacingRight(false);
+        // if (_moveInput >  0.2f) SetFacingRight(true);
+    }
+
+    public void SetFacingRight(bool right)
+    {
+        if (body == null) return;
+        if (_facingRight == right) return;
+
+        _facingRight = right;
+        _targetBodyYaw = right ? bodyYawRight : bodyYawLeft;
+        _targetBodyX   = right ? bodyXRight   : bodyXLeft;
+    }
+
+    void UpdateBodyFlipSmoothing()
+    {
+        if (body == null) return;
+
+        // Smooth rotation (Y only)
+        _currentBodyYaw = Mathf.SmoothDampAngle(_currentBodyYaw, _targetBodyYaw, ref _bodyYawVel, Mathf.Max(0.0001f, bodyYawSmoothTime));
+        var e = body.localEulerAngles;
+        e.y = _currentBodyYaw;
+        body.localEulerAngles = e;
+
+        // Smooth local X
+        _currentBodyX = Mathf.SmoothDamp(_currentBodyX, _targetBodyX, ref _bodyXVel, Mathf.Max(0.0001f, bodyXSmoothTime));
+        var lp = body.localPosition;
+        lp.x = _currentBodyX;
+        body.localPosition = lp;
     }
 
     void ApplyHorizontalSweepMove()
