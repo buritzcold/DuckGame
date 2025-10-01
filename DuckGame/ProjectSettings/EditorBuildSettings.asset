@@ -8,7 +8,7 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/SampleScene.unity
     guid: 99c9720ab356a0642a771bea13969a05
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/LevelWireframse.unity
     guid: 8de44e3bcd5151044b9e588d7dcaf7ba
   - enabled: 0
@@ -17,12 +17,15 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/Level1.unity
     guid: babbc32fa5ef4344ab0b4b756349f24a
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/TunnelLevel.unity
     guid: 654ea19982c12f1419c3af01ded824d8
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/OutdoorLevel.unity
     guid: f6a13949605e5c54485af71a0bc5d7ff
+  - enabled: 1
+    path: Assets/Scenes/1.unity
+    guid: 52d38a43b53bbd44092968815c3756f7
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0
